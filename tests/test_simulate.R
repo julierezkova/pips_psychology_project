@@ -48,7 +48,18 @@ d <- simulate_clusters(3, 90, centroids = my_centres,
                        x_range = c(200, 1000), y_range = c(0, 1), seed = 1)
 stopifnot(all(abs(attr(d, "centroids") - my_centres) < 1e-8))
 
-# 8. Invalid inputs give an error (tryCatch returns TRUE if an error happened)
+# 8. Every layout puts the closest centres exactly `separation` apart,
+#    and "random" is reproducible with a seed
+for (lay in c("circle", "line", "random")) {
+  d <- simulate_clusters(5, 200, separation = 2, layout = lay, seed = 1)
+  stopifnot(abs(attr(d, "min_cohens_d") - 2) < 1e-8)
+}
+stopifnot(identical(
+  simulate_clusters(4, 100, layout = "random", seed = 3),
+  simulate_clusters(4, 100, layout = "random", seed = 3)
+))
+
+# 9. Invalid inputs give an error (tryCatch returns TRUE if an error happened)
 gives_error <- function(expr) {
   tryCatch({ expr; FALSE }, error = function(e) TRUE)
 }
@@ -59,7 +70,15 @@ stopifnot(
   gives_error(simulate_clusters(3, 90, x_range = c(5, 1))),  # min > max
   gives_error(simulate_clusters(3, 90, separation = -1)),
   gives_error(simulate_clusters(3, 90, group_names = c("a", "b"))),
-  gives_error(simulate_clusters(3, 90, centroids = c(1, 2, 3)))
+  gives_error(simulate_clusters(3, 90, centroids = c(1, 2, 3))),
+  gives_error(simulate_clusters(3, 90, layout = "triangle"))
 )
+
+# 10. plot_clusters() makes a plot that can be drawn without errors
+source("src/plot_clusters.R")
+d <- simulate_clusters(3, 90, seed = 1)
+p <- plot_clusters(d, x_label = "Reaction time (ms)", y_label = "Accuracy")
+invisible(ggplot2::ggplot_build(p))   # builds the plot; errors if anything is wrong
+stopifnot(gives_error(plot_clusters(data.frame(a = 1:3))))
 
 cat("All simulation checks passed.\n")
