@@ -19,6 +19,11 @@
 #' @param separation Smallest distance between two group centres on the
 #'   standard scale (non-negative). Larger values = groups further apart.
 #'   Ignored when `centroids` are supplied. Default 3.
+#' @param layout How the group centres are arranged when no `centroids` are
+#'   supplied: `"circle"` (default; evenly spaced on a circle), `"line"`
+#'   (on a diagonal line, so x and y are positively correlated across groups)
+#'   or `"random"` (random positions). In every layout the two closest
+#'   centres are exactly `separation` apart.
 #' @param closeness How tightly the points sit around their centre: the
 #'   within-group standard deviation is `1 / closeness` on the standard scale.
 #'   One number for all groups or one per group. Default 1 (SD = 1).
@@ -29,7 +34,7 @@
 #' @param centroids Optional (advanced): a matrix or data frame with
 #'   `n_clusters` rows and 2 columns (x, y) giving each group's centre in the
 #'   units of `x_range` and `y_range`. If `NULL` (default), centres are placed
-#'   evenly on a circle around the middle of the ranges.
+#'   automatically according to `layout`.
 #' @param group_names Optional names for the groups, e.g.
 #'   `c("ADHD", "Control")`. Default: "1", "2", "3", ...
 #' @param seed Optional number for reproducible results. Note: this sets R's
@@ -52,6 +57,7 @@ simulate_clusters <- function(
     n_total,
     group_sizes = 1,
     separation = 3,
+    layout = c("circle", "line", "random"),
     closeness = 1,
     x_range = c(-5, 5),
     y_range = c(-5, 5),
@@ -91,6 +97,10 @@ simulate_clusters <- function(
     stop("separation must be a single non-negative number.")
   }
 
+  # match.arg() picks "circle" when nothing is given, and gives an error
+  # listing the allowed options when the user types something else.
+  layout <- match.arg(layout)
+
   check_range <- function(r, name) {
     if (!is.numeric(r) || length(r) != 2 || any(!is.finite(r)) ||
         r[1] >= r[2]) {
@@ -116,16 +126,34 @@ simulate_clusters <- function(
 
   # ---- 3. Group centres (on the standard scale) -----------------------------
 
+  # Set the seed here (before the "random" layout draws its centres), so that
+  # the whole result, including random centres, is reproducible.
+  if (!is.null(seed)) set.seed(seed)
+
   if (is.null(centroids)) {
-    # Place centres evenly on a circle, so that neighbouring centres are
-    # exactly `separation` apart. Chord length between neighbours on a circle
-    # with radius r is 2 * r * sin(pi / k), so r = separation / (2 sin(pi/k)).
     if (k == 1) {
       centers <- matrix(c(0, 0), nrow = 1)
-    } else {
+
+    } else if (layout == "circle") {
+      # Evenly on a circle, so neighbouring centres are exactly `separation`
+      # apart. Distance between neighbours on a circle with radius r is
+      # 2 * r * sin(pi / k), so r = separation / (2 * sin(pi / k)).
       angle  <- 2 * pi * (seq_len(k) - 1) / k
       radius <- separation / (2 * sin(pi / k))
       centers <- cbind(radius * cos(angle), radius * sin(angle))
+
+    } else if (layout == "line") {
+      # On the diagonal line y = x, centred on 0. Moving `separation` along
+      # the diagonal means moving separation / sqrt(2) in both x and y.
+      position <- (seq_len(k) - (k + 1) / 2) * separation / sqrt(2)
+      centers  <- cbind(position, position)
+
+    } else {
+      # "random": draw random positions, centre them on 0, then rescale so
+      # that the two closest centres are exactly `separation` apart.
+      centers <- matrix(stats::runif(2 * k, min = -1, max = 1), ncol = 2)
+      centers <- sweep(centers, 2, colMeans(centers))
+      centers <- centers * separation / min(stats::dist(centers))
     }
   } else {
     centers <- as.matrix(centroids)
@@ -157,8 +185,6 @@ simulate_clusters <- function(
   }
 
   # ---- 5. Simulate the points -------------------------------------------------
-
-  if (!is.null(seed)) set.seed(seed)
 
   group <- rep(seq_len(k), times = counts)   # group number of every point
   sds   <- 1 / closeness                     # within-group SD per group
