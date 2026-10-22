@@ -42,22 +42,8 @@ Individual scripts will install any packages not already installed, and load all
 
 ## Group Contributions
 
-+----------------------------------------+-----------------+---------------+
 | Description                            | R Scripts       | Contributer   |
-+========================================+=================+===============+
-| Data simulation and visualization      | simulate.R      | \@elakovac    |
-|                                        |                 |               |
-|                                        | plot_clusters.R |               |
-|                                        |                 |               |
-|                                        | test_simulate.R |               |
-+----------------------------------------+-----------------+---------------+
-| Shiny app and Github                   | main.qmd        | @claireakelly |
-|                                        |                 |               |
-|                                        | README.md       |               |
-|                                        |                 |               |
-|                                        | app.R           |               |
-+----------------------------------------+-----------------+---------------+
-| Data analysis and illustrative example | analysis.R      | @julierezkova |
-|                                        |                 |               |
-|                                        | main.qmd        |               |
-+----------------------------------------+-----------------+---------------+
+| ---                                    | ---             |  ---          |
+| Data simulation and visualization      | `simulate.R` <br>  `plot_clusters.R` <br> `test_simulate.R` | \@elakovac    |
+| Shiny app and Github                   | `main.qmd` <br> `README.md` <br> `app.R` | @claireakelly |
+| Data analysis and illustrative example | `analysis.R`  <br>  `main.qmd`  | @julierezkova |
