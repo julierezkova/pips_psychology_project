@@ -1,6 +1,21 @@
 # src/app.R
 # Keep simulate.R and plot_clusters.R beside app.R.
 # Launch from the parent folder with shiny::runApp("src").
+# Install dependencies, if not present
+pkgs <- c("shiny", "ggplot2", "bslib")
+
+missing_pkgs <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
+
+if (length(missing_pkgs) > 0) {
+  install.packages(missing_pkgs, repos = "https://cloud.r-project.org")
+}
+
+# Load package dependencies
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+# src/app.R
+# Keep simulate.R and plot_clusters.R beside app.R.
+# Launch from the parent folder: shiny::runApp("src")
 library(shiny)
 library(ggplot2)
 library(bslib)
@@ -27,11 +42,12 @@ snake_case_names <- function(labels) {
   normalized[match(labels, originals)]
 }
 
+# Seed is still a simulation input, but is omitted from the overview.
 # Adjust aliases if simulate.R uses different attribute names.
 metadata_keys <- list(
   names = c("group_names", "cluster_names"),
   centroids = c("centroids", "cluster_centroids"),
-  separation = "separation", closeness = "closeness", seed = "seed"
+  separation = "separation", closeness = "closeness"
 )
 get_metadata <- function(df, keys) {
   attrs <- attributes(df)
@@ -46,8 +62,6 @@ pretty_value <- function(v) {
   text[is.na(v)] <- "Not available"
   paste(text, collapse = ", ")
 }
-# Shared scalar closeness applies to every cluster; named vectors are matched
-# by name; unnamed vectors are matched to the simulator's group order.
 cluster_value <- function(value, label, index, n) {
   if (is.null(value)) return(NULL)
   if (!is.null(names(value)) && label %in% names(value)) return(value[[label]])
@@ -137,7 +151,6 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   dataset <- reactiveVal(NULL)
-  # Frozen settings describe the last successful simulation, not pending edits.
   simulation_settings <- reactiveVal(NULL)
   status <- reactiveVal("Click Simulate data to generate a dataset.")
   finite <- function(z) is.numeric(z) && length(z) == 1L && is.finite(z)
@@ -252,7 +265,8 @@ server <- function(input, output, session) {
   output$scatter_plot <- renderPlot({
     df <- dataset()
     validate(need(!is.null(df), status()))
-    print(plot_clusters(data = df, x_label = "x", y_label = "y", title = "Simulated data", show_centroids = TRUE))
+    # No title inside the ggplot; the separate UI heading is unchanged.
+    print(plot_clusters(data = df, x_label = "x", y_label = "y", title = NULL, show_centroids = TRUE))
   }, res = 110)
   
   output$metadata <- renderUI({
@@ -269,8 +283,7 @@ server <- function(input, output, session) {
       div(class = "overall-details", h4("Overall dataset"),
           line("Total size", paste(format(nrow(df), big.mark = ","), "observations")),
           line("Number of clusters", pretty_value(settings$n_clusters)),
-          line("Separation", pretty_value(values$separation)),
-          line("Seed", if (is.null(values$seed)) "Not recorded (or no fixed seed supplied)" else pretty_value(values$seed))),
+          line("Separation", pretty_value(values$separation))),
       h4("Cluster descriptions"),
       p(class = "text-muted", "Sizes are actual observation counts. Centroids and closeness are read from dataset attributes; shared closeness applies to every cluster."),
       lapply(labels, function(label) {
@@ -304,3 +317,4 @@ server <- function(input, output, session) {
     }, contentType = "text/csv")
 }
 shinyApp(ui = ui, server = server)
+

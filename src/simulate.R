@@ -69,7 +69,16 @@ simulate_clusters <- function(
 ) {
 
   # ---- 1. Check the inputs -------------------------------------------------
-
+  if (!requireNamespace("utils", quietly = TRUE)) {
+    stop("The package 'utils' is needed. ",
+         "Install it with install.packages(\"utils\").")
+  }
+  
+  if (!requireNamespace("stats", quietly = TRUE)) {
+    stop("The package 'stats' is needed. ",
+         "Install it with install.packages(\"stats\").")
+  }
+  
   is_whole_number <- function(z) {
     is.numeric(z) && length(z) == 1 && is.finite(z) && z >= 1 && z == round(z)
   }
