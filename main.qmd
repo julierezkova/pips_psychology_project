@@ -35,7 +35,7 @@ invisible(lapply(pkgs, library, character.only = TRUE))
 source("src/plot_clusters.R")
 source("src/simulate.R")
 source("src/app.R")
-#source("src/analysis.R")
+source("src/analysis.R")
 ```
 
 ## R implimentation
@@ -109,7 +109,7 @@ Simulated data can also be used to demonstrate statistical analyses commonly app
 The analysis function summarizes the data, tests for differences between groups, applies a Bonferroni correction when conducting multiple comparisons, and provides plots and plain-language interpretations of the results. This demonstrates how simulated data can be used to explore statistical methods and understand how group differences may be evaluated.
 
 ```{r}
-#results <- run_analysis()
+results <- run_analysis()
 ```
 
 Running the function produces summary tables, statistical test results, and visualizations for comparing the ADHD and Control groups.
