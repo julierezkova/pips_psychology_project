@@ -67,7 +67,7 @@ simulate_clusters <- function(
     group_names = NULL,
     seed = NULL
 ) {
-
+  
   # ---- 1. Check the inputs -------------------------------------------------
   if (!requireNamespace("utils", quietly = TRUE)) {
     stop("The package 'utils' is needed. ",
@@ -90,7 +90,7 @@ simulate_clusters <- function(
   }
   k <- as.integer(n_clusters)
   n <- as.integer(n_total)
-
+  
   # Arguments that can be one value (used for every group) or one per group.
   one_per_group <- function(z, name) {
     if (!is.numeric(z) || !(length(z) %in% c(1, k)) ||
@@ -102,16 +102,16 @@ simulate_clusters <- function(
   }
   group_sizes <- one_per_group(group_sizes, "group_sizes")
   closeness   <- one_per_group(closeness, "closeness")
-
+  
   if (!is.numeric(separation) || length(separation) != 1 ||
       !is.finite(separation) || separation < 0) {
     stop("separation must be a single non-negative number.")
   }
-
+  
   # match.arg() picks "circle" when nothing is given, and gives an error
   # listing the allowed options when the user types something else.
   layout <- match.arg(layout)
-
+  
   check_range <- function(r, name) {
     if (!is.numeric(r) || length(r) != 2 || any(!is.finite(r)) ||
         r[1] >= r[2]) {
@@ -120,31 +120,31 @@ simulate_clusters <- function(
   }
   check_range(x_range, "x_range")
   check_range(y_range, "y_range")
-
+  
   if (is.null(group_names)) {
     group_names <- as.character(seq_len(k))
   }
   if (length(group_names) != k || anyDuplicated(group_names) > 0) {
     stop("group_names must contain ", k, " different names (one per group).")
   }
-
+  
   # ---- 2. Conversion between the standard scale and the user's units -------
   # The standard scale runs from -5 to 5 on both axes. A straight-line
   # conversion keeps the shape of the clusters (only the units change).
-
+  
   to_user_units <- function(v, r) r[1] + (v + 5) / 10 * (r[2] - r[1])
   to_standard   <- function(v, r) (v - r[1]) / (r[2] - r[1]) * 10 - 5
-
+  
   # ---- 3. Group centres (on the standard scale) -----------------------------
-
+  
   # Set the seed here (before the "random" layout draws its centres), so that
   # the whole result, including random centres, is reproducible.
   if (!is.null(seed)) set.seed(seed)
-
+  
   if (is.null(centroids)) {
     if (k == 1) {
       centers <- matrix(c(0, 0), nrow = 1)
-
+      
     } else if (layout == "circle") {
       # Evenly on a circle, so neighbouring centres are exactly `separation`
       # apart. Distance between neighbours on a circle with radius r is
@@ -152,13 +152,13 @@ simulate_clusters <- function(
       angle  <- 2 * pi * (seq_len(k) - 1) / k
       radius <- separation / (2 * sin(pi / k))
       centers <- cbind(radius * cos(angle), radius * sin(angle))
-
+      
     } else if (layout == "line") {
       # On the diagonal line y = x, centred on 0. Moving `separation` along
       # the diagonal means moving separation / sqrt(2) in both x and y.
       position <- (seq_len(k) - (k + 1) / 2) * separation / sqrt(2)
       centers  <- cbind(position, position)
-
+      
     } else {
       # "random": draw random positions, centre them on 0, then rescale so
       # that the average distance between any two centres are exactly `separation`.
@@ -177,12 +177,12 @@ simulate_clusters <- function(
     centers <- cbind(to_standard(centers[, 1], x_range),
                      to_standard(centers[, 2], y_range))
   }
-
+  
   # ---- 4. Number of observations per group -----------------------------------
   # Divide n over the groups in proportion to group_sizes. Rounding down can
   # leave a few observations over; give those to the groups that lost the
   # most by rounding ("largest remainder" method), so the total is exactly n.
-
+  
   expected  <- n * group_sizes / sum(group_sizes)
   counts    <- floor(expected)
   leftover  <- n - sum(counts)
@@ -194,31 +194,31 @@ simulate_clusters <- function(
     stop("Every group needs at least 2 observations. Increase n_total or ",
          "make the group_sizes more equal.")
   }
-
+  
   # ---- 5. Simulate the points -------------------------------------------------
-
+  
   group <- rep(seq_len(k), times = counts)   # group number of every point
   sds   <- 1 / closeness                     # within-group SD per group
-
+  
   x_std <- rnorm(n, mean = centers[group, 1], sd = sds[group])
   y_std <- rnorm(n, mean = centers[group, 2], sd = sds[group])
-
+  
   result <- data.frame(
     x     = to_user_units(x_std, x_range),
     y     = to_user_units(y_std, y_range),
     class = factor(group_names[group], levels = group_names)
   )
-
+  
   # Shuffle the rows so the data are not sorted by group.
   result <- result[sample.int(n), , drop = FALSE]
   rownames(result) <- NULL
-
+  
   # ---- 6. Store extra information as attributes ------------------------------
-
+  
   centers_user <- cbind(x = to_user_units(centers[, 1], x_range),
                         y = to_user_units(centers[, 2], y_range))
   rownames(centers_user) <- group_names
-
+  
   # Cohen's d between the two closest groups, on the standard scale:
   # distance between centres divided by the (pooled) within-group SD.
   min_d <- NA_real_
@@ -241,6 +241,6 @@ simulate_clusters <- function(
   attr(result, "cluster_sizes") <- stats::setNames(as.integer(counts),
                                                    group_names)
   attr(result, "min_cohens_d")  <- min_d
-
+  
   result
 }
