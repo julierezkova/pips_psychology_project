@@ -1,4 +1,108 @@
 ---
-title: "main"
+title: "Bivariate cluster simulation made easy!"
 format: html
+toc: true
+editor_options: 
+  chunk_output_type: console
 ---
+
+Our project is a one-stop-shop for simulating realistic clustered bivariate data sets that can be used in psychological research to evaluate methods, simulate phenomena, create test data, or even just to play around and explore some of the parameters that effect how data clusters.
+
+This document is an introduction to how users can simulate data on their own, either directly in R or through a user-friendly interface of a Shiny app.
+
+A link to an illustrative example of the psychological utility of this project is included at the end.
+
+## Setup code
+
+All source code is kept in the `src` folder.
+
+```{r setup, message=FALSE}
+# Install dependencies, if not present
+### make sure to include all the packages! and add this code to each script
+pkgs <- c("knitr", "dplyr", "ggplot2", "readr")
+
+missing_pkgs <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
+
+if (length(missing_pkgs) > 0) {
+  install.packages(missing_pkgs, repos = "https://cloud.r-project.org")
+}
+
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+# Load package dependencies
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+# Source files
+source("src/plot_clusters.R")
+source("src/simulate.R")
+source("src/app.R")
+# source("src/analysis.R")
+```
+
+## R implimentation
+
+### 1. Argument specification
+
+Regardless of whether programming in R or the using Shiny app, users have the opportunity to specify the inputs that will be used to simulate the data.
+
+Specification relies on the area of application. For example, these values may be chosen directly from observed values in prior research, hypothesized or theoretical values, or extreme values that test the limit of a model or method.
+
+- **Number of clusters**
+
+- **Total number of observations**
+
+- Relative size of each group
+
+- Separation (average distance between two clusters centers)
+
+- Layout of cluster centers (circle, line, or random)
+
+- Closeness (How tightly the points sit around their centre)
+
+- Range of possible values for two, continuous, numeric variables
+
+- Centroids of each cluster
+
+- Name of each cluster
+
+- Random seed generator value
+
+*Required specification are in bold, otherwise all arguments have defaults that can be overwritten.*
+
+### 2. Simulating data
+
+After completed the set up described above, users are able to simulate clustered data directly in R and save the resulting data frame for further analysis.
+
+```{r simulate}
+data <- simulate_clusters(n_clusters = 3, n_total = 150)
+```
+
+### 3. Visualizing data
+
+Users can easy visualize data as a scatter plot, including cluster labels, and centroid locations
+
+```{r plot}
+plot_clusters(data)
+```
+
+## Shiny app tutorial
+
+The same clustered data can be generated through a user-friendly Shiny app. The app provides additional summary descriptions of the data and the choice to export the data as a CSV so it can be shared or further analyzed.
+
+### 1. Running the app
+
+```{r app, eval = FALSE}
+runApp("src")
+```
+
+###  2. Video tutorial
+
+This video tutorial walks through the full simulation process, includuing specification of arguments, data generation, automatic plotting, and exporting to CSV. *This video does not contain any audio.*
+
+```{r}
+#code
+```
+
+***Include screenshots?***
+
+## Illustrative example
