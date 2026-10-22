@@ -22,7 +22,7 @@
 #' @param layout How the group centres are arranged when no `centroids` are
 #'   supplied: `"circle"` (default; evenly spaced on a circle), `"line"`
 #'   (on a diagonal line, so x and y are positively correlated across groups)
-#'   or `"random"` (random positions). In every layout the average distance between any two
+#'   or `"random"` (random positions). In every layout the two closest
 #'   centres are exactly `separation` apart.
 #' @param closeness How tightly the points sit around their centre: the
 #'   within-group standard deviation is `1 / closeness` on the standard scale.
@@ -161,11 +161,11 @@ simulate_clusters <- function(
       
     } else {
       # "random": draw random positions, centre them on 0, then rescale so
-      # that the average distance between any two centres are exactly `separation`.
+      # that the two closest centres are exactly `separation` apart.
       centers <- matrix(stats::runif(2 * k, min = -1, max = 1), ncol = 2)
       centers <- sweep(centers, 2, colMeans(centers))
-      centers <- centers * separation / mean(stats::dist(centers))
-    }
+      centers <- centers * separation / min(stats::dist(centers))    
+      }
   } else {
     centers <- as.matrix(centroids)
     if (!is.numeric(centers) || !identical(dim(centers), c(k, 2L)) ||
