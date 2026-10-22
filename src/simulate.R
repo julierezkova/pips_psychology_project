@@ -22,7 +22,7 @@
 #' @param layout How the group centres are arranged when no `centroids` are
 #'   supplied: `"circle"` (default; evenly spaced on a circle), `"line"`
 #'   (on a diagonal line, so x and y are positively correlated across groups)
-#'   or `"random"` (random positions). In every layout the two closest
+#'   or `"random"` (random positions). In every layout the average distance between any two
 #'   centres are exactly `separation` apart.
 #' @param closeness How tightly the points sit around their centre: the
 #'   within-group standard deviation is `1 / closeness` on the standard scale.
@@ -47,7 +47,9 @@
 #'   - `cluster_sizes`: number of observations per group
 #'   - `min_cohens_d`: Cohen's d between the two closest groups
 #'     (= distance between their centres / within-group SD)
-#'
+#'   - `cluster_names`: the names of each cluster
+#'   - `separation`: the input separation value to simulate clusters. If centroids were specified, returns `NA`
+#'   - `closeness`: closeness value for each cluster
 #' @examples
 #' d <- simulate_clusters(n_clusters = 3, n_total = 150, seed = 1)
 #' head(d)
@@ -150,10 +152,10 @@ simulate_clusters <- function(
 
     } else {
       # "random": draw random positions, centre them on 0, then rescale so
-      # that the two closest centres are exactly `separation` apart.
+      # that the average distance between any two centres are exactly `separation`.
       centers <- matrix(stats::runif(2 * k, min = -1, max = 1), ncol = 2)
       centers <- sweep(centers, 2, colMeans(centers))
-      centers <- centers * separation / min(stats::dist(centers))
+      centers <- centers * separation / mean(stats::dist(centers))
     }
   } else {
     centers <- as.matrix(centroids)
@@ -220,8 +222,13 @@ simulate_clusters <- function(
     })
     min_d <- min(d_values)
   }
-
-  attr(result, "centroids")     <- centers_user
+  
+  attr(result, "cluster_names") <- group_names
+  attr(result, "separation") <- if (is.null(centroids)) separation else NA_real_
+  attr(result, "closeness") <- closeness
+  attr(result, "n_clusters") <- n_clusters
+  attr(result, "n_total") <- n_total
+  attr(result, "centroids") <- centers_user
   attr(result, "cluster_sizes") <- stats::setNames(as.integer(counts),
                                                    group_names)
   attr(result, "min_cohens_d")  <- min_d
