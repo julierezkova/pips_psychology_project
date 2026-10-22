@@ -13,12 +13,6 @@ if (length(missing_pkgs) > 0) {
 # Load package dependencies
 invisible(lapply(pkgs, library, character.only = TRUE))
 
-# src/app.R
-# Keep simulate.R and plot_clusters.R beside app.R.
-# Launch from the parent folder: shiny::runApp("src")
-library(shiny)
-library(ggplot2)
-library(bslib)
 
 dirs <- unique(c(getOption("cluster_app_dir", NULL), getwd(), file.path(getwd(), "src")))
 found <- dirs[vapply(dirs, function(d) all(file.exists(file.path(d, c("simulate.R", "plot_clusters.R")))), logical(1))]
@@ -41,14 +35,9 @@ snake_case_names <- function(labels) {
   normalized <- make.unique(normalized, sep = "_")
   normalized[match(labels, originals)]
 }
-
-# Seed is still a simulation input, but is omitted from the overview.
-# Adjust aliases if simulate.R uses different attribute names.
-metadata_keys <- list(
-  names = c("group_names", "cluster_names"),
-  centroids = c("centroids", "cluster_centroids"),
-  separation = "separation", closeness = "closeness"
-)
+# Seed remains available for simulation but is not displayed in the overview.
+metadata_keys <- list(names = c("group_names", "cluster_names"),
+                      centroids = c("centroids", "cluster_centroids"), separation = "separation", closeness = "closeness")
 get_metadata <- function(df, keys) {
   attrs <- attributes(df)
   for (key in keys) if (key %in% names(attrs)) return(attrs[[key]])
@@ -71,11 +60,8 @@ cluster_value <- function(value, label, index, n) {
 }
 centroid_matrix <- function(value) {
   if (is.list(value) && !is.data.frame(value)) {
-    if (all(c("x", "y") %in% names(value))) {
-      value <- tryCatch(as.data.frame(value[c("x", "y")]), error = function(e) NULL)
-    } else if (length(value) && all(vapply(value, function(v) is.atomic(v) && length(v) == 2L, logical(1)))) {
-      value <- do.call(rbind, value)
-    }
+    if (all(c("x", "y") %in% names(value))) value <- tryCatch(as.data.frame(value[c("x", "y")]), error = function(e) NULL)
+    else if (length(value) && all(vapply(value, function(v) is.atomic(v) && length(v) == 2L, logical(1)))) value <- do.call(rbind, value)
   }
   if (!(is.matrix(value) || is.data.frame(value)) || ncol(value) < 2L) return(NULL)
   if (all(c("x", "y") %in% colnames(value))) value <- value[, c("x", "y"), drop = FALSE]
@@ -123,9 +109,9 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(width = 3, class = "compact",
                  h4("Simulation inputs"),
-                 div(class = "pair",
-                     div(numericInput("n_total", "Observations", 300, min = 2, max = 100000, step = 1)),
+                 div(class = "pair", div(numericInput("n_total", "Observations", 300, min = 2, max = 100000, step = 1)),
                      div(numericInput("n_clusters", "Clusters", 3, min = 1, max = 100, step = 1))),
+                 helpText("Cluster count: 1–100. You can clear this field while entering a new number."),
                  checkboxInput("specify_centroids", "Specify centroids", FALSE),
                  h4("Cluster settings"), div(class = "cluster-editor", uiOutput("cluster_rows")),
                  actionButton("add_cluster", "Add cluster", icon = icon("plus")),
@@ -138,14 +124,10 @@ ui <- fluidPage(
                  checkboxInput("use_seed", "Specify random seed", FALSE),
                  conditionalPanel("input.use_seed", numericInput("seed", "Random seed", 123, min = 0, max = .Machine$integer.max, step = 1)),
                  helpText("Unchecked passes seed = NULL."), actionButton("simulate", "Simulate data", class = "btn-primary"),
-                 hr(), h4("CSV export"),
-                 conditionalPanel("output.hasData", downloadButton("download_csv", "Download CSV")),
+                 hr(), h4("CSV export"), conditionalPanel("output.hasData", downloadButton("download_csv", "Download CSV")),
                  helpText("CSV class names use snake_case. Plot labels are unchanged. CSV excludes attributes.")),
-    mainPanel(width = 9,
-              h4("Simulated dataset"), plotOutput("scatter_plot", height = "500px"),
-              div(class = "panel panel-default metadata",
-                  div(class = "panel-heading", "Simulation details"),
-                  div(class = "panel-body", uiOutput("metadata"))))
+    mainPanel(width = 9, h4("Simulated dataset"), plotOutput("scatter_plot", height = "500px"),
+              div(class = "panel panel-default metadata", div(class = "panel-heading", "Simulation details"), div(class = "panel-body", uiOutput("metadata"))))
   )
 )
 
@@ -155,6 +137,7 @@ server <- function(input, output, session) {
   status <- reactiveVal("Click Simulate data to generate a dataset.")
   finite <- function(z) is.numeric(z) && length(z) == 1L && is.finite(z)
   integer_value <- function(z) finite(z) && z == floor(z)
+  valid_cluster_count <- function(z) integer_value(z) && z >= 1 && z <= 100
   rows_state <- reactiveVal(list(
     list(id = 1L, name = "Cluster 1", weight = 1, x = 0, y = 0),
     list(id = 2L, name = "Cluster 2", weight = 1, x = 0, y = 0),
@@ -168,7 +151,11 @@ server <- function(input, output, session) {
     }
     row
   }))
-  set_rows <- function(rows) { rows_state(rows); updateNumericInput(session, "n_clusters", value = length(rows)) }
+  # Only explicit Add/Remove actions write back to the count input.
+  set_rows <- function(rows) {
+    rows_state(rows)
+    updateNumericInput(session, "n_clusters", value = length(rows))
+  }
   register_delete <- function(id) {
     force(id)
     delete_observers[[as.character(id)]] <<- observeEvent(input[[paste0("delete_", id)]], {
@@ -178,10 +165,17 @@ server <- function(input, output, session) {
       if (!all(keep)) set_rows(rows[keep])
     }, ignoreInit = TRUE)
   }
-  new_row <- function() {
+  new_row <- function(position) {
     next_id <<- next_id + 1L
     register_delete(next_id)
-    list(id = next_id, name = paste("Cluster", next_id), weight = 1, x = 0, y = 0)
+    
+    list(
+      id = next_id,
+      name = paste("Cluster", position),
+      weight = 1,
+      x = 0,
+      y = 0
+    )
   }
   for (id in 1:3) register_delete(id)
   session$onSessionEnded(function() { for (o in delete_observers) o$destroy() })
@@ -192,8 +186,7 @@ server <- function(input, output, session) {
       button <- actionButton(paste0("delete_", row$id), NULL, icon = icon("minus"), class = "cluster-remove", title = paste("Remove cluster", i), `aria-label` = paste("Remove cluster", i))
       if (length(rows) == 1L) button <- tagAppendAttributes(button, disabled = "disabled")
       div(class = "cluster-card", div(class = "cluster-card-top", strong(paste("Cluster", i)), button),
-          div(class = "pair",
-              div(class = "cluster-name", textInput(paste0("cluster_name_", row$id), "Name", row$name)),
+          div(class = "pair", div(class = "cluster-name", textInput(paste0("cluster_name_", row$id), "Name", row$name)),
               div(numericInput(paste0("cluster_weight_", row$id), "Relative size", row$weight, min = 0.01, step = 0.1))),
           conditionalPanel("input.specify_centroids", div(class = "pair",
                                                           div(numericInput(paste0("cluster_x_", row$id), "Centroid x", row$x, step = 0.1)),
@@ -201,23 +194,28 @@ server <- function(input, output, session) {
     }))
   })
   outputOptions(output, "cluster_rows", suspendWhenHidden = FALSE)
+  
+  # FIX: blank/partial/invalid input is allowed while typing. Do not reset it
+  # or show a notification on each keystroke. Validate when Simulate is clicked.
+  # Updating valid cluster rows never writes back into the count widget.
   observeEvent(input$n_clusters, {
     target <- input$n_clusters
-    if (!integer_value(target) || target < 1 || target > 100) {
-      showNotification("Clusters must be an integer from 1 to 100.", type = "warning")
-      updateNumericInput(session, "n_clusters", value = length(rows_state()))
-      return(invisible(NULL))
-    }
+    if (!valid_cluster_count(target)) return(invisible(NULL))
     rows <- snapshot()
     if (target == length(rows)) return(invisible(NULL))
     if (target < length(rows)) rows <- rows[seq_len(target)]
-    while (length(rows) < target) rows[[length(rows) + 1L]] <- new_row()
-    set_rows(rows)
-  }, ignoreInit = TRUE)
+    while (length(rows) < target) {
+      position <- length(rows) + 1L
+      rows[[position]] <- new_row(position)
+    }
+    rows_state(rows)
+  }, ignoreInit = TRUE, ignoreNULL = FALSE)
+  
   observeEvent(input$add_cluster, {
     rows <- snapshot()
     if (length(rows) >= 100) { showNotification("Maximum 100 clusters.", type = "warning"); return(invisible(NULL)) }
-    rows[[length(rows) + 1L]] <- new_row()
+    position <- length(rows) + 1L
+    rows[[position]] <- new_row(position)
     set_rows(rows)
   }, ignoreInit = TRUE)
   
@@ -226,7 +224,7 @@ server <- function(input, output, session) {
     simulation_settings(NULL)
     tryCatch({
       if (!integer_value(input$n_total) || input$n_total < 2 || input$n_total > 100000) stop("Total observations must be an integer from 2 to 100000.")
-      if (!integer_value(input$n_clusters) || input$n_clusters < 1 || input$n_clusters > 100 || input$n_clusters > input$n_total) stop("Cluster count must be between 1 and min(100, observations).")
+      if (!valid_cluster_count(input$n_clusters) || input$n_clusters > input$n_total) stop("Enter a cluster count between 1 and min(100, observations).")
       if (!finite(input$separation) || !finite(input$closeness)) stop("Separation and closeness must be finite numbers.")
       if (!(input$layout %in% c("circle", "line", "random"))) stop("Select a valid layout.")
       if (!all(vapply(list(input$x_min, input$x_max, input$y_min, input$y_max), finite, logical(1)))) stop("Range endpoints must be finite.")
@@ -249,9 +247,8 @@ server <- function(input, output, session) {
         centroids <- data.frame(x = vapply(rows, function(row) as.numeric(row$x), numeric(1)), y = vapply(rows, function(row) as.numeric(row$y), numeric(1)))
       }
       df <- simulate_clusters(n_clusters = as.integer(input$n_clusters), n_total = as.integer(input$n_total),
-                              group_sizes = group_sizes, separation = input$separation, layout = input$layout,
-                              closeness = input$closeness, x_range = c(input$x_min, input$x_max), y_range = c(input$y_min, input$y_max),
-                              centroids = centroids, group_names = group_names, seed = seed)
+                              group_sizes = group_sizes, separation = input$separation, layout = input$layout, closeness = input$closeness,
+                              x_range = c(input$x_min, input$x_max), y_range = c(input$y_min, input$y_max), centroids = centroids, group_names = group_names, seed = seed)
       if (!is.data.frame(df) || !all(c("x", "y", "class") %in% names(df))) stop("simulate_clusters must return a dataframe with x, y, class.")
       if (!nrow(df) || !is.numeric(df$x) || !is.numeric(df$y)) stop("Data must be non-empty with numeric x/y.")
       if (!is.atomic(df$class) || !is.null(dim(df$class))) stop("class must be a vector.")
@@ -265,10 +262,8 @@ server <- function(input, output, session) {
   output$scatter_plot <- renderPlot({
     df <- dataset()
     validate(need(!is.null(df), status()))
-    # No title inside the ggplot; the separate UI heading is unchanged.
     print(plot_clusters(data = df, x_label = "x", y_label = "y", title = NULL, show_centroids = TRUE))
   }, res = 110)
-  
   output$metadata <- renderUI({
     df <- dataset()
     if (is.null(df)) return(p(status()))
@@ -282,8 +277,7 @@ server <- function(input, output, session) {
     tagList(
       div(class = "overall-details", h4("Overall dataset"),
           line("Total size", paste(format(nrow(df), big.mark = ","), "observations")),
-          line("Number of clusters", pretty_value(settings$n_clusters)),
-          line("Separation", pretty_value(values$separation))),
+          line("Number of clusters", pretty_value(settings$n_clusters)), line("Separation", pretty_value(values$separation))),
       h4("Cluster descriptions"),
       p(class = "text-muted", "Sizes are actual observation counts. Centroids and closeness are read from dataset attributes; shared closeness applies to every cluster."),
       lapply(labels, function(label) {
@@ -295,14 +289,11 @@ server <- function(input, output, session) {
           if (!is.na(row_index)) centroid <- centers[row_index, ]
         }
         centroid_text <- if (is.null(centroid)) "Not recorded or cannot be matched to this cluster" else paste0("x = ", pretty_value(centroid[1]), "; y = ", pretty_value(centroid[2]))
-        div(class = "cluster-description", h4(label),
-            line("Name", label),
-            line("Size", paste(sum(as.character(df$class) == label, na.rm = TRUE), "observations")),
-            line("Centroid", centroid_text),
+        div(class = "cluster-description", h4(label), line("Name", label),
+            line("Size", paste(sum(as.character(df$class) == label, na.rm = TRUE), "observations")), line("Centroid", centroid_text),
             line("Closeness", pretty_value(cluster_value(values$closeness, label, index, n))))
       }),
-      if (anyNA(df$class)) p(class = "text-muted", paste(sum(is.na(df$class)), "observations have no class label."))
-    )
+      if (anyNA(df$class)) p(class = "text-muted", paste(sum(is.na(df$class)), "observations have no class label.")))
   })
   output$hasData <- reactive(!is.null(dataset()))
   outputOptions(output, "hasData", suspendWhenHidden = FALSE)
